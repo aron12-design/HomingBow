@@ -9,7 +9,9 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityShootBowEvent;
 import org.bukkit.event.entity.ProjectileHitEvent;
+import org.bukkit.inventory.ItemFlag;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.Damageable;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -44,6 +46,7 @@ public class HomingBowPlugin extends JavaPlugin implements Listener {
 
     private void loadConfigValues() {
         FileConfiguration c = getConfig();
+
         customModelData = c.getInt("bow_match.custom_model_data", 0);
 
         range = c.getDouble("homing.range", 40.0);
@@ -60,7 +63,18 @@ public class HomingBowPlugin extends JavaPlugin implements Listener {
         ItemStack bow = e.getBow();
         if (bow == null) return;
 
+        // ✅ DURABILITY FIX (MINDIG ELTŰNIK A ZÖLD CSÍK)
         ItemMeta meta = bow.getItemMeta();
+        if (meta != null) {
+            meta.setUnbreakable(true);
+            meta.addItemFlags(ItemFlag.HIDE_UNBREAKABLE);
+
+            if (meta instanceof Damageable dmg) {
+                dmg.setDamage(0);
+            }
+            bow.setItemMeta(meta);
+        }
+
         if (meta == null || !meta.hasCustomModelData()) return;
         if (meta.getCustomModelData() != customModelData) return;
 
@@ -71,8 +85,10 @@ public class HomingBowPlugin extends JavaPlugin implements Listener {
 
         arrow.getPersistentDataContainer().set(key, PersistentDataType.BYTE, (byte) 1);
         arrows.add(arrow.getUniqueId());
-        expireAt.put(arrow.getUniqueId(),
-                System.currentTimeMillis() + lifetimeMillis);
+        expireAt.put(
+                arrow.getUniqueId(),
+                System.currentTimeMillis() + lifetimeMillis
+        );
     }
 
     // ================= HIT =================
@@ -83,7 +99,7 @@ public class HomingBowPlugin extends JavaPlugin implements Listener {
         Byte tag = arrow.getPersistentDataContainer().get(key, PersistentDataType.BYTE);
         if (tag == null || tag != (byte) 1) return;
 
-        // === MOB HIT → FIX 200 DAMAGE ===
+        // === MOB HIT → FIX DAMAGE + ARROW REMOVE ===
         if (e.getHitEntity() instanceof LivingEntity target) {
             Object shooterObj = arrow.getShooter();
 
@@ -130,7 +146,9 @@ public class HomingBowPlugin extends JavaPlugin implements Listener {
 
                 LivingEntity target = findTarget(arrow);
                 if (target == null) {
-                    arrow.setVelocity(arrow.getVelocity().normalize().multiply(arrowSpeed));
+                    arrow.setVelocity(
+                            arrow.getVelocity().normalize().multiply(arrowSpeed)
+                    );
                     continue;
                 }
 
