@@ -4,10 +4,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.NamespacedKey;
 import org.bukkit.World;
 import org.bukkit.configuration.file.FileConfiguration;
-import org.bukkit.entity.AbstractArrow;
-import org.bukkit.entity.ArmorStand;
-import org.bukkit.entity.LivingEntity;
-import org.bukkit.entity.Player;
+import org.bukkit.entity.*;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityShootBowEvent;
@@ -16,13 +13,9 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
-import org.bukkit.projectiles.ProjectileSource;
 import org.bukkit.util.Vector;
 
-import java.util.Iterator;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class HomingBowPlugin extends JavaPlugin implements Listener {
@@ -33,13 +26,11 @@ public class HomingBowPlugin extends JavaPlugin implements Listener {
     private NamespacedKey key;
 
     private int customModelData;
-
-    private boolean enabled;
     private double range;
     private double turnRate;
     private double arrowSpeed;
     private long lifetimeMillis;
-    private boolean hoverWhenNoTarget;
+    private double damageAmount;
 
     @Override
     public void onEnable() {
@@ -48,24 +39,24 @@ public class HomingBowPlugin extends JavaPlugin implements Listener {
         key = new NamespacedKey(this, "homing");
         Bukkit.getPluginManager().registerEvents(this, this);
         startTask();
-        getLogger().info("HomingBow enabled");
+        getLogger().info("HomingBow ENABLED");
     }
 
     private void loadConfigValues() {
         FileConfiguration c = getConfig();
         customModelData = c.getInt("bow_match.custom_model_data", 0);
-        enabled = c.getBoolean("homing.enabled", true);
+
         range = c.getDouble("homing.range", 40.0);
         turnRate = c.getDouble("homing.turn_rate", 0.35);
         arrowSpeed = c.getDouble("homing.arrow_speed", 2.2);
         lifetimeMillis = c.getLong("homing.lifetime_seconds", 10) * 1000L;
-        hoverWhenNoTarget = c.getBoolean("homing.hover_when_no_target", true);
+
+        damageAmount = c.getDouble("damage.amount", 200.0);
     }
 
+    // ================= SHOOT =================
     @EventHandler
     public void onShoot(EntityShootBowEvent e) {
-        if (!enabled) return;
-
         ItemStack bow = e.getBow();
         if (bow == null) return;
 
@@ -73,15 +64,18 @@ public class HomingBowPlugin extends JavaPlugin implements Listener {
         if (meta == null || !meta.hasCustomModelData()) return;
         if (meta.getCustomModelData() != customModelData) return;
 
-        if (e.getProjectile() instanceof AbstractArrow arrow) {
-            arrow.setGravity(false);
-            arrow.getPersistentDataContainer().set(key, PersistentDataType.BYTE, (byte) 1);
-            arrows.add(arrow.getUniqueId());
-            expireAt.put(arrow.getUniqueId(),
-                    System.currentTimeMillis() + lifetimeMillis);
-        }
+        if (!(e.getProjectile() instanceof AbstractArrow arrow)) return;
+
+        arrow.setGravity(false);
+        arrow.setVelocity(arrow.getVelocity().normalize().multiply(arrowSpeed));
+
+        arrow.getPersistentDataContainer().set(key, PersistentDataType.BYTE, (byte) 1);
+        arrows.add(arrow.getUniqueId());
+        expireAt.put(arrow.getUniqueId(),
+                System.currentTimeMillis() + lifetimeMillis);
     }
 
+    // ================= HIT =================
     @EventHandler
     public void onProjectileHit(ProjectileHitEvent e) {
         if (!(e.getEntity() instanceof AbstractArrow arrow)) return;
@@ -89,23 +83,42 @@ public class HomingBowPlugin extends JavaPlugin implements Listener {
         Byte tag = arrow.getPersistentDataContainer().get(key, PersistentDataType.BYTE);
         if (tag == null || tag != (byte) 1) return;
 
+        // === MOB HIT → FIX 200 DAMAGE ===
+        if (e.getHitEntity() instanceof LivingEntity target) {
+            Object shooterObj = arrow.getShooter();
+
+            if (shooterObj instanceof LivingEntity shooter) {
+                target.damage(damageAmount, shooter);
+            } else {
+                target.damage(damageAmount);
+            }
+
+            arrow.remove();
+            arrows.remove(arrow.getUniqueId());
+            expireAt.remove(arrow.getUniqueId());
+            return;
+        }
+
+        // === BLOCK HIT → NE RAGADJON BE ===
         arrow.setGravity(false);
-        Vector n = (e.getHitBlockFace() != null)
+
+        Vector push = (e.getHitBlockFace() != null)
                 ? e.getHitBlockFace().getDirection()
                 : new Vector(0, 1, 0);
 
-        arrow.teleport(arrow.getLocation().add(n.multiply(0.25)));
-        arrow.setVelocity(new Vector(0, 0, 0));
+        arrow.teleport(arrow.getLocation().add(push.multiply(0.3)));
+        arrow.setVelocity(push.multiply(0.1));
     }
 
+    // ================= HOMING LOOP =================
     private void startTask() {
         Bukkit.getScheduler().runTaskTimer(this, () -> {
             Iterator<UUID> it = arrows.iterator();
             while (it.hasNext()) {
                 UUID id = it.next();
                 AbstractArrow arrow = findArrow(id);
-
                 Long exp = expireAt.get(id);
+
                 if (arrow == null || exp == null || System.currentTimeMillis() > exp) {
                     if (arrow != null) arrow.remove();
                     it.remove();
@@ -115,29 +128,36 @@ public class HomingBowPlugin extends JavaPlugin implements Listener {
 
                 arrow.setGravity(false);
 
-                LivingEntity target = findNearestMob(arrow);
+                LivingEntity target = findTarget(arrow);
                 if (target == null) {
-                    if (hoverWhenNoTarget) {
-                        arrow.setVelocity(new Vector(0, 0, 0));
-                    }
+                    arrow.setVelocity(arrow.getVelocity().normalize().multiply(arrowSpeed));
                     continue;
                 }
 
-                Vector dir = target.getEyeLocation().toVector()
+                Vector toTarget = target.getEyeLocation().toVector()
                         .subtract(arrow.getLocation().toVector())
                         .normalize();
 
-                arrow.setVelocity(dir.multiply(arrowSpeed));
+                Vector current = arrow.getVelocity().normalize();
+                Vector newDir = current.multiply(1.0 - turnRate)
+                        .add(toTarget.multiply(turnRate))
+                        .normalize();
+
+                arrow.setVelocity(newDir.multiply(arrowSpeed));
             }
         }, 1L, 1L);
     }
 
-    private LivingEntity findNearestMob(AbstractArrow arrow) {
+    // ================= TARGET =================
+    private LivingEntity findTarget(AbstractArrow arrow) {
         double best = range * range;
         LivingEntity chosen = null;
 
         for (LivingEntity e : arrow.getWorld().getLivingEntities()) {
-            if (e instanceof Player || e instanceof ArmorStand) continue;
+            if (e instanceof Player) continue;
+            if (e instanceof ArmorStand) continue;
+            if (e.isDead() || !e.isValid()) continue;
+
             double d = e.getLocation().distanceSquared(arrow.getLocation());
             if (d < best) {
                 best = d;
