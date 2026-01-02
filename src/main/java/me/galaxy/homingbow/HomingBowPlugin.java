@@ -207,11 +207,11 @@ public class HomingBowPlugin extends JavaPlugin implements Listener {
         World w = loc.getWorld();
         if (w == null) return;
 
-        // Border-dust look: use REDSTONE + DustOptions
-        if (particleType == Particle.REDSTONE) {
-            w.spawnParticle(Particle.REDSTONE, loc, particleCount, offX, offY, offZ, particleSpeed, dustOptions);
-            return;
-        }
+       // Border-dust look: use DUST + DustOptions (compatible)
+if (particleType == Particle.DUST) {
+    w.spawnParticle(Particle.DUST, loc, particleCount, offX, offY, offZ, particleSpeed, dustOptions);
+    return;
+}
 
         // Generic particles (no extra data)
         w.spawnParticle(particleType, loc, particleCount, offX, offY, offZ, particleSpeed);
