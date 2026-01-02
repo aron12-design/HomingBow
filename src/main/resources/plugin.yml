@@ -11,3 +11,7 @@ commands:
 permissions:
   homingbow.admin:
     default: op
+commands:
+  lunarfix:
+    description: Lunar Bow lore + infinity + unbreakable fix
+    usage: /lunarfix
