@@ -1,4 +1,4 @@
-name: Build HomingBow (Clean)
+name: Build HomingBow (Gradle)
 
 on:
   workflow_dispatch:
@@ -20,11 +20,14 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - name: Clean & Build with Maven
-        run: mvn clean package
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build with Gradle
+        run: gradle build
 
       - name: Upload HomingBow jar
         uses: actions/upload-artifact@v4
         with:
           name: HomingBow-jar
-          path: target/HomingBow-*.jar
+          path: build/libs/*.jar
