@@ -1,5 +1,7 @@
 package me.galaxy.homingbow;
 
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.entity.ProjectileHitEvent;
 import org.bukkit.Bukkit;
 import org.bukkit.NamespacedKey;
 import org.bukkit.World;
@@ -50,6 +52,24 @@ public class HomingBowPlugin extends JavaPlugin implements Listener {
         startTask();
         getLogger().info("HomingBow 1.0.1-mobonly-fixed enabled.");
     }
+    
+@EventHandler
+public void onProjectileHit(ProjectileHitEvent e) {
+    if (!(e.getEntity() instanceof AbstractArrow arrow)) return;
+
+    // csak a mi homing nyilaink
+    Byte tag = arrow.getPersistentDataContainer().get(key, PersistentDataType.BYTE);
+    if (tag == null || tag != (byte) 1) return;
+
+    // lebegjen tovább, ne “ragadjon be” blokkba
+    arrow.setGravity(false);
+
+    // ha van ilyen a te Paper buildeden, jó — ha nincs, a try-catch megfogja
+    try { arrow.setInBlock(false); } catch (Throwable ignored) {}
+
+    // “reset” hogy újra keressen és ne álljon meg
+    arrow.setVelocity(new Vector(0, 0, 0));
+}
 
     private void loadConfigValues() {
         reloadConfig();
