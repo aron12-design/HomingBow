@@ -53,23 +53,6 @@ public class HomingBowPlugin extends JavaPlugin implements Listener {
         getLogger().info("HomingBow 1.0.1-mobonly-fixed enabled.");
     }
     
-@EventHandler
-public void onProjectileHit(ProjectileHitEvent e) {
-    if (!(e.getEntity() instanceof AbstractArrow arrow)) return;
-
-    Byte tag = arrow.getPersistentDataContainer().get(key, PersistentDataType.BYTE);
-    if (tag == null || tag != (byte) 1) return;
-
-    // ha mobot ütött és azt akarod, hogy eltűnjön:
-    // if (e.getHitEntity() != null) { arrow.remove(); return; }
-
-    arrow.setGravity(false);
-
-    Vector n = (e.getHitBlockFace() != null) ? e.getHitBlockFace().getDirection() : new Vector(0, 1, 0);
-    arrow.teleport(arrow.getLocation().add(n.multiply(0.25)));
-    arrow.setVelocity(new Vector(0, 0, 0));
-}
-
     private void loadConfigValues() {
         reloadConfig();
         FileConfiguration c = getConfig();
@@ -221,3 +204,37 @@ public void onProjectileHit(ProjectileHitEvent e) {
         return false;
     }
 }
+@EventHandler
+public void onShoot(EntityShootBowEvent e) {
+    if (!enabled) return;
+
+    ItemStack bow = e.getBow();
+    if (bow == null) {
+        getLogger().info("Shoot: bow=null");
+        return;
+    }
+
+    ItemMeta meta = bow.getItemMeta();
+    if (meta == null) {
+        getLogger().info("Shoot: meta=null");
+        return;
+    }
+
+    if (!meta.hasCustomModelData()) {
+        getLogger().info("Shoot: no CMD on bow meta");
+        return;
+    }
+
+    int cmd = meta.getCustomModelData();
+    getLogger().info("Shoot: bow CMD=" + cmd + " | config CMD=" + customModelData);
+
+    if (cmd != customModelData) return;
+
+    if (e.getProjectile() instanceof AbstractArrow arrow) {
+        arrow.setGravity(false);
+        arrow.getPersistentDataContainer().set(key, PersistentDataType.BYTE, (byte) 1);
+        arrows.add(arrow.getUniqueId());
+        expireAtMillis.put(arrow.getUniqueId(), System.currentTimeMillis() + lifetimeMillis);
+    }
+}
+
