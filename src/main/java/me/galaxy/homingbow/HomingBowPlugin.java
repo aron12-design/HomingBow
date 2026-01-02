@@ -112,11 +112,12 @@ public class HomingBowPlugin extends JavaPlugin implements Listener {
     // ✅ LORE
     List<Component> lore = List.of(
         Component.empty(),
+        mm.deserialize("<gray>• Sebzés: <white>" + (int) damageAmount + " <red>❤"),
+        Component.empty(),
         mm.deserialize("<gold><bold>PASSZÍV</bold> <dark_gray>-</dark_gray> <yellow>🏹 Nyomkövetés <green>[+]</green>"),
         mm.deserialize("<gray>- Nyílvessző követi az ellenséges mobokat."),
         mm.deserialize("<dark_gray>(<white>40 blokk<dark_gray>)"),
         Component.empty(),
-        mm.deserialize("<gray>• Sebzés: <white>" + (int) damageAmount + " <red>❤"),
         Component.empty(),
         mm.deserialize("<gold><bold>LEGENDÁS FEGYVER</bold>")
     );
