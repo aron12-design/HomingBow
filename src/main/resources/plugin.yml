@@ -1,0 +1,13 @@
+name: HomingBow
+version: 1.0.0
+main: me.galaxy.homingbow.HomingBowPlugin
+api-version: "1.21"
+author: Galaxy
+description: Homing arrows for a special bow (ItemsAdder-compatible via CustomModelData/name/lore match)
+commands:
+  homingbowreload:
+    description: Reload HomingBow config
+    permission: homingbow.admin
+permissions:
+  homingbow.admin:
+    default: op
