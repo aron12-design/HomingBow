@@ -108,7 +108,7 @@ public class HomingBowPlugin extends JavaPlugin implements Listener {
         // Lore (1/1 like your screenshot, 40 blocks)
         List<Component> lore = List.of(
                 Component.empty(),
-                mm.deserialize("<gold><bold>PASSZÍV</bold> <dark_gray>-</dark_gray> <yellow>✕ Nyomkövetés <green>[+]</green>"),
+                mm.deserialize("<gold><bold>PASSZÍV</bold> <dark_gray>-</dark_gray> <yellow>🏹 Nyomkövetés <green>[+]</green>"),
                 mm.deserialize("<gray>- Nyílvessző követi az ellenséges mobokat."),
                 mm.deserialize("<dark_gray>(<white>40 blokk<dark_gray>)"),
                 Component.empty(),
