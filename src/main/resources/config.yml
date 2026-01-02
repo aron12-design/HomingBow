@@ -1,17 +1,20 @@
 bow_match:
-  custom_model_data: 123456   # <- ide a Lunar Bow CMD
+  custom_model_data: 88012
 
 homing:
-  enabled: true
-  range: 25.0
-  turn_rate: 0.22
+  range: 40.0
+  turn_rate: 0.35
+  arrow_speed: 2.2
+  lifetime_seconds: 10
 
-avoid_players:
-  enabled: true
-  radius: 1.5
+damage:
+  amount: 200.0
 
-targets:
-  target_mobs: true
-  ignore_shooter: true
-  ignore_tamed: true
-  ignore_armor_stands: true
+particles:
+  enabled: true
+  type: END_ROD
+  count: 2
+  offset:
+    x: 0.03
+    y: 0.03
+    z: 0.03
