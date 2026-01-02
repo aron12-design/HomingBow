@@ -88,39 +88,45 @@ public class HomingBowPlugin extends JavaPlugin implements Listener {
         return meta != null && meta.hasCustomModelData() && meta.getCustomModelData() == customModelData;
     }
 
-    private void applyLunarMeta(ItemStack bow) {
-        if (!isLunarBow(bow)) return;
+  private void applyLunarMeta(ItemStack bow) {
+    if (!isLunarBow(bow)) return;
 
-        ItemMeta meta = bow.getItemMeta();
-        if (meta == null) return;
+    ItemMeta meta = bow.getItemMeta();
+    if (meta == null) return;
 
-        // Preserve CMD (texture key)
-        int cmd = meta.getCustomModelData();
+    int cmd = meta.getCustomModelData();
 
-        // Durability bar OFF
-        meta.setUnbreakable(true);
-        meta.addItemFlags(ItemFlag.HIDE_UNBREAKABLE);
-        if (meta instanceof Damageable dmg) dmg.setDamage(0);
+    // Durability OFF
+    meta.setUnbreakable(true);
+    meta.addItemFlags(ItemFlag.HIDE_UNBREAKABLE);
+    if (meta instanceof Damageable dmg) dmg.setDamage(0);
 
-        // Infinity I (VISIBLE)
-        meta.addEnchant(Enchantment.INFINITY, 1, true);
+    // Infinity I (látszik)
+    meta.addEnchant(Enchantment.INFINITY, 1, true);
 
-        // Lore (1/1 like your screenshot, 40 blocks)
-        List<Component> lore = List.of(
-                Component.empty(),
-                mm.deserialize("<gold><bold>PASSZÍV</bold> <dark_gray>-</dark_gray> <yellow>🏹 Nyomkövetés <green>[+]</green>"),
-                mm.deserialize("<gray>- Nyílvessző követi az ellenséges mobokat."),
-                mm.deserialize("<dark_gray>(<white>40 blokk<dark_gray>)"),
-                Component.empty(),
-                mm.deserialize("<gold><bold>LEGENDÁS FEGYVER</bold>")
-        );
-        meta.lore(lore);
+    // ✅ NÉV
+    meta.displayName(
+        mm.deserialize("<yellow><bold>Luni íj</bold>")
+    );
 
-        // Re-set CMD just in case
-        meta.setCustomModelData(cmd);
+    // ✅ LORE
+    List<Component> lore = List.of(
+        Component.empty(),
+        mm.deserialize("<gold><bold>PASSZÍV</bold> <dark_gray>-</dark_gray> <yellow>🏹 Nyomkövetés <green>[+]</green>"),
+        mm.deserialize("<gray>- Nyílvessző követi az ellenséges mobokat."),
+        mm.deserialize("<dark_gray>(<white>40 blokk<dark_gray>)"),
+        Component.empty(),
+        mm.deserialize("<gray>• Sebzés: <white>" + (int) damageAmount + " <red>❤"),
+        Component.empty(),
+        mm.deserialize("<gold><bold>LEGENDÁS FEGYVER</bold>")
+    );
+    meta.lore(lore);
 
-        bow.setItemMeta(meta);
-    }
+    // CMD vissza (textúra védelem)
+    meta.setCustomModelData(cmd);
+
+    bow.setItemMeta(meta);
+}
 
     // ================= SHOOT =================
     @EventHandler
