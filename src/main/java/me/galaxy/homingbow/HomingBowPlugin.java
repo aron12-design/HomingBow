@@ -63,32 +63,36 @@ public class HomingBowPlugin extends JavaPlugin implements Listener {
         ItemStack bow = e.getBow();
         if (bow == null) return;
 
-        // ✅ DURABILITY FIX (MINDIG ELTŰNIK A ZÖLD CSÍK)
+        // Remove durability bar (unbreakable + hide tooltip + reset damage)
         ItemMeta meta = bow.getItemMeta();
         if (meta != null) {
             meta.setUnbreakable(true);
             meta.addItemFlags(ItemFlag.HIDE_UNBREAKABLE);
-
             if (meta instanceof Damageable dmg) {
                 dmg.setDamage(0);
             }
             bow.setItemMeta(meta);
         }
 
+        // Re-read meta after setting
+        meta = bow.getItemMeta();
         if (meta == null || !meta.hasCustomModelData()) return;
         if (meta.getCustomModelData() != customModelData) return;
 
         if (!(e.getProjectile() instanceof AbstractArrow arrow)) return;
 
         arrow.setGravity(false);
-        arrow.setVelocity(arrow.getVelocity().normalize().multiply(arrowSpeed));
+
+        // Safe initial velocity (avoid NaN)
+        Vector v = arrow.getVelocity();
+        if (v.lengthSquared() < 1e-6) {
+            v = arrow.getLocation().getDirection();
+        }
+        arrow.setVelocity(v.normalize().multiply(arrowSpeed));
 
         arrow.getPersistentDataContainer().set(key, PersistentDataType.BYTE, (byte) 1);
         arrows.add(arrow.getUniqueId());
-        expireAt.put(
-                arrow.getUniqueId(),
-                System.currentTimeMillis() + lifetimeMillis
-        );
+        expireAt.put(arrow.getUniqueId(), System.currentTimeMillis() + lifetimeMillis);
     }
 
     // ================= HIT =================
@@ -99,10 +103,9 @@ public class HomingBowPlugin extends JavaPlugin implements Listener {
         Byte tag = arrow.getPersistentDataContainer().get(key, PersistentDataType.BYTE);
         if (tag == null || tag != (byte) 1) return;
 
-        // === MOB HIT → FIX DAMAGE + ARROW REMOVE ===
+        // MOB HIT -> FIX damage (never 0) + remove arrow
         if (e.getHitEntity() instanceof LivingEntity target) {
             Object shooterObj = arrow.getShooter();
-
             if (shooterObj instanceof LivingEntity shooter) {
                 target.damage(damageAmount, shooter);
             } else {
@@ -115,15 +118,14 @@ public class HomingBowPlugin extends JavaPlugin implements Listener {
             return;
         }
 
-        // === BLOCK HIT → NE RAGADJON BE ===
+        // BLOCK HIT -> nudge out so it does not stick
         arrow.setGravity(false);
-
         Vector push = (e.getHitBlockFace() != null)
                 ? e.getHitBlockFace().getDirection()
                 : new Vector(0, 1, 0);
 
-        arrow.teleport(arrow.getLocation().add(push.multiply(0.3)));
-        arrow.setVelocity(push.multiply(0.1));
+        arrow.teleport(arrow.getLocation().add(push.multiply(0.30)));
+        arrow.setVelocity(push.multiply(0.10));
     }
 
     // ================= HOMING LOOP =================
@@ -146,33 +148,42 @@ public class HomingBowPlugin extends JavaPlugin implements Listener {
 
                 LivingEntity target = findTarget(arrow);
                 if (target == null) {
-                    arrow.setVelocity(
-                            arrow.getVelocity().normalize().multiply(arrowSpeed)
-                    );
+                    // keep moving forward safely
+                    Vector v = arrow.getVelocity();
+                    if (v.lengthSquared() < 1e-6) {
+                        v = arrow.getLocation().getDirection();
+                    }
+                    arrow.setVelocity(v.normalize().multiply(arrowSpeed));
                     continue;
                 }
 
                 Vector toTarget = target.getEyeLocation().toVector()
-                        .subtract(arrow.getLocation().toVector())
-                        .normalize();
+                        .subtract(arrow.getLocation().toVector());
 
-                Vector current = arrow.getVelocity().normalize();
-                Vector newDir = current.multiply(1.0 - turnRate)
-                        .add(toTarget.multiply(turnRate))
-                        .normalize();
+                if (toTarget.lengthSquared() < 1e-6) continue;
 
-                arrow.setVelocity(newDir.multiply(arrowSpeed));
+                Vector desired = toTarget.normalize();
+
+                Vector currentVel = arrow.getVelocity();
+                if (currentVel.lengthSquared() < 1e-6) {
+                    currentVel = arrow.getLocation().getDirection().multiply(0.01);
+                }
+                Vector current = currentVel.normalize();
+
+                Vector newDir = current.multiply(1.0 - turnRate).add(desired.multiply(turnRate));
+                if (newDir.lengthSquared() < 1e-6) continue;
+
+                arrow.setVelocity(newDir.normalize().multiply(arrowSpeed));
             }
         }, 1L, 1L);
     }
 
-    // ================= TARGET =================
     private LivingEntity findTarget(AbstractArrow arrow) {
         double best = range * range;
         LivingEntity chosen = null;
 
         for (LivingEntity e : arrow.getWorld().getLivingEntities()) {
-            if (e instanceof Player) continue;
+            if (e instanceof Player) continue;       // never target players
             if (e instanceof ArmorStand) continue;
             if (e.isDead() || !e.isValid()) continue;
 
