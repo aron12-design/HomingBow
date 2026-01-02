@@ -1,134 +1,29 @@
-package me.galaxy.homingbow;
+name: Build HomingBow
 
-import org.bukkit.Bukkit;
-import org.bukkit.NamespacedKey;
-import org.bukkit.World;
-import org.bukkit.configuration.file.FileConfiguration;
-import org.bukkit.entity.AbstractArrow;
-import org.bukkit.entity.ArmorStand;
-import org.bukkit.entity.LivingEntity;
-import org.bukkit.entity.Player;
-import org.bukkit.event.EventHandler;
-import org.bukkit.event.Listener;
-import org.bukkit.event.entity.EntityShootBowEvent;
-import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.meta.ItemMeta;
-import org.bukkit.persistence.PersistentDataType;
-import org.bukkit.plugin.java.JavaPlugin;
-import org.bukkit.projectiles.ProjectileSource;
-import org.bukkit.util.Vector;
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "main" ]
 
-import java.util.Iterator;
-import java.util.Set;
-import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-public class HomingBowPlugin extends JavaPlugin implements Listener {
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
 
-    private final Set<UUID> arrows = ConcurrentHashMap.newKeySet();
-    private NamespacedKey key;
+      - name: Build with Maven
+        run: mvn -B -ntp package
 
-    private int customModelData;
-    private double range;
-    private double turnRate;
-
-    @Override
-    public void onEnable() {
-        saveDefaultConfig();
-        key = new NamespacedKey(this, "homing");
-        loadConfig();
-        Bukkit.getPluginManager().registerEvents(this, this);
-        startTask();
-    }
-
-    private void loadConfig() {
-        FileConfiguration c = getConfig();
-        customModelData = c.getInt("bow_match.custom_model_data");
-        range = c.getDouble("homing.range", 25.0);
-        turnRate = c.getDouble("homing.turn_rate", 0.22);
-    }
-
-    @EventHandler
-    public void onShoot(EntityShootBowEvent e) {
-        ItemStack bow = e.getBow();
-        if (bow == null) return;
-
-        ItemMeta meta = bow.getItemMeta();
-        if (meta == null || !meta.hasCustomModelData()) return;
-        if (meta.getCustomModelData() != customModelData) return;
-
-        if (e.getProjectile() instanceof AbstractArrow arrow) {
-            arrow.getPersistentDataContainer().set(key, PersistentDataType.BYTE, (byte) 1);
-            arrows.add(arrow.getUniqueId());
-        }
-    }
-
-    private void startTask() {
-        Bukkit.getScheduler().runTaskTimer(this, () -> {
-            Iterator<UUID> it = arrows.iterator();
-
-            while (it.hasNext()) {
-                UUID id = it.next();
-                AbstractArrow arrow = findArrow(id);
-
-                if (arrow == null || arrow.isDead()) {
-                    it.remove();
-                    continue;
-                }
-
-                LivingEntity target = findMobTarget(arrow);
-                if (target == null) continue;
-
-                Vector to = target.getEyeLocation().toVector()
-                        .subtract(arrow.getLocation().toVector())
-                        .normalize();
-
-                Vector vel = arrow.getVelocity();
-                double speed = vel.length();
-
-                Vector newVel = vel.normalize()
-                        .multiply(1.0 - turnRate)
-                        .add(to.multiply(turnRate))
-                        .normalize()
-                        .multiply(speed);
-
-                arrow.setVelocity(newVel);
-            }
-        }, 1L, 1L);
-    }
-
-    private AbstractArrow findArrow(UUID id) {
-        for (World w : Bukkit.getWorlds()) {
-            for (AbstractArrow a : w.getEntitiesByClass(AbstractArrow.class)) {
-                if (a.getUniqueId().equals(id)) return a;
-            }
-        }
-        return null;
-    }
-
-    // 🔒 HARD LOCK: CSAK MOBOK
-    private LivingEntity findMobTarget(AbstractArrow arrow) {
-        double best = range * range;
-        LivingEntity chosen = null;
-
-        ProjectileSource src = arrow.getShooter();
-
-        for (LivingEntity e : arrow.getWorld().getLivingEntities()) {
-
-            if (e instanceof Player) continue;        // ❌ játékos soha
-            if (e instanceof ArmorStand) continue;
-            if (e.isDead()) continue;
-
-            if (src instanceof LivingEntity shooter) {
-                if (e.getUniqueId().equals(shooter.getUniqueId())) continue;
-            }
-
-            double d = e.getLocation().distanceSquared(arrow.getLocation());
-            if (d < best) {
-                best = d;
-                chosen = e;
-            }
-        }
-        return chosen;
-    }
-}
+      - name: Upload plugin jar
+        uses: actions/upload-artifact@v4
+        with:
+          name: HomingBow-jar
+          path: target/HomingBow-1.0.0.jar
