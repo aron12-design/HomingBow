@@ -1,7 +1,12 @@
 package me.galaxy.homingbow;
 
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.*;
+import org.bukkit.command.Command;
+import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.*;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -32,26 +37,25 @@ public class HomingBowPlugin extends JavaPlugin implements Listener {
     private long lifetimeMillis;
     private double damageAmount;
 
-    // Particles
+    // particle
     private boolean particlesEnabled;
     private Particle particleType;
     private int particleCount;
     private double offX, offY, offZ;
-    private double particleSpeed;
-    private boolean onlyWhenHoming;
-    private Particle.DustOptions dustOptions; // REDSTONE-hoz
+
+    private final MiniMessage mm = MiniMessage.miniMessage();
 
     @Override
     public void onEnable() {
         saveDefaultConfig();
-        loadConfigValues();
+        loadCfg();
         key = new NamespacedKey(this, "homing");
         Bukkit.getPluginManager().registerEvents(this, this);
         startTask();
         getLogger().info("HomingBow ENABLED");
     }
 
-    private void loadConfigValues() {
+    private void loadCfg() {
         reloadConfig();
         FileConfiguration c = getConfig();
 
@@ -64,33 +68,46 @@ public class HomingBowPlugin extends JavaPlugin implements Listener {
 
         damageAmount = c.getDouble("damage.amount", 200.0);
 
-        // Particles
-        particlesEnabled = c.getBoolean("particles.enabled", false);
-        String typeStr = c.getString("particles.type", "REDSTONE");
-        particleType = Particle.valueOf(typeStr.toUpperCase(Locale.ROOT));
+        particlesEnabled = c.getBoolean("particles.enabled", true);
+        String p = c.getString("particles.type", "END_ROD");
+        try {
+            particleType = Particle.valueOf(p.toUpperCase(Locale.ROOT));
+        } catch (Exception e) {
+            particleType = Particle.END_ROD;
+        }
 
         particleCount = Math.max(0, c.getInt("particles.count", 2));
-        offX = c.getDouble("particles.offset.x", 0.05);
-        offY = c.getDouble("particles.offset.y", 0.05);
-        offZ = c.getDouble("particles.offset.z", 0.05);
-        particleSpeed = c.getDouble("particles.speed", 0.0);
-        onlyWhenHoming = c.getBoolean("particles.only_when_homing", true);
-
-        // REDSTONE dust szín
-        double r = clamp01(c.getDouble("particles.dust.color.red", 1.0));
-        double g = clamp01(c.getDouble("particles.dust.color.green", 0.0));
-        double b = clamp01(c.getDouble("particles.dust.color.blue", 0.0));
-        float size = (float) Math.max(0.1, c.getDouble("particles.dust.size", 1.0));
-
-        // Bukkit Color 0-255
-        Color color = Color.fromRGB((int) Math.round(r * 255), (int) Math.round(g * 255), (int) Math.round(b * 255));
-        dustOptions = new Particle.DustOptions(color, size);
+        offX = c.getDouble("particles.offset.x", 0.03);
+        offY = c.getDouble("particles.offset.y", 0.03);
+        offZ = c.getDouble("particles.offset.z", 0.03);
     }
 
-    private static double clamp01(double v) {
-        if (v < 0) return 0;
-        if (v > 1) return 1;
-        return v;
+    // ====== Lore + meta fix (Unbreakable + Infinity visible) ======
+    private void applyLunarMeta(ItemStack bow) {
+        ItemMeta meta = bow.getItemMeta();
+        if (meta == null) return;
+
+        // durability bar OFF
+        meta.setUnbreakable(true);
+        meta.addItemFlags(ItemFlag.HIDE_UNBREAKABLE);
+        if (meta instanceof Damageable dmg) dmg.setDamage(0);
+
+        // Infinity I (VISIBLE!)
+        meta.addEnchant(Enchantment.INFINITY, 1, true);
+        // NINCS HIDE_ENCHANTS -> látszik az enchant
+
+        // Lore (1/1 a képed szerint, 40 blokk)
+        List<Component> lore = List.of(
+                Component.empty(),
+                mm.deserialize("<gold><bold>PASSZÍV</bold> <dark_gray>-</dark_gray> <yellow>✕ Nyomkövetés <green>[+]</green>"),
+                mm.deserialize("<gray>- Nyílvessző követi az ellenséges mobokat."),
+                mm.deserialize("<dark_gray>(<white>40 blokk<dark_gray>)"),
+                Component.empty(),
+                mm.deserialize("<gold><bold>LEGENDÁS FEGYVER</bold>")
+        );
+        meta.lore(lore);
+
+        bow.setItemMeta(meta);
     }
 
     // ================= SHOOT =================
@@ -99,16 +116,10 @@ public class HomingBowPlugin extends JavaPlugin implements Listener {
         ItemStack bow = e.getBow();
         if (bow == null) return;
 
-        // ✅ durability bar OFF
-        ItemMeta meta = bow.getItemMeta();
-        if (meta != null) {
-            meta.setUnbreakable(true);
-            meta.addItemFlags(ItemFlag.HIDE_UNBREAKABLE);
-            if (meta instanceof Damageable dmg) dmg.setDamage(0);
-            bow.setItemMeta(meta);
-        }
+        // mindig frissítjük a meta-t (lore + infinity + unbreakable)
+        applyLunarMeta(bow);
 
-        meta = bow.getItemMeta();
+        ItemMeta meta = bow.getItemMeta();
         if (meta == null || !meta.hasCustomModelData()) return;
         if (meta.getCustomModelData() != customModelData) return;
 
@@ -116,7 +127,6 @@ public class HomingBowPlugin extends JavaPlugin implements Listener {
 
         arrow.setGravity(false);
 
-        // Safe initial velocity (avoid NaN)
         Vector v = arrow.getVelocity();
         if (v.lengthSquared() < 1e-6) v = arrow.getLocation().getDirection();
         arrow.setVelocity(v.normalize().multiply(arrowSpeed));
@@ -128,16 +138,16 @@ public class HomingBowPlugin extends JavaPlugin implements Listener {
 
     // ================= HIT =================
     @EventHandler
-    public void onProjectileHit(ProjectileHitEvent e) {
+    public void onHit(ProjectileHitEvent e) {
         if (!(e.getEntity() instanceof AbstractArrow arrow)) return;
 
         Byte tag = arrow.getPersistentDataContainer().get(key, PersistentDataType.BYTE);
         if (tag == null || tag != (byte) 1) return;
 
-        // MOB HIT -> FIX damage + remove arrow
+        // mob hit → FIX damage
         if (e.getHitEntity() instanceof LivingEntity target) {
-            Object shooterObj = arrow.getShooter();
-            if (shooterObj instanceof LivingEntity shooter) target.damage(damageAmount, shooter);
+            Object s = arrow.getShooter();
+            if (s instanceof LivingEntity shooter) target.damage(damageAmount, shooter);
             else target.damage(damageAmount);
 
             arrow.remove();
@@ -146,14 +156,17 @@ public class HomingBowPlugin extends JavaPlugin implements Listener {
             return;
         }
 
-        // BLOCK HIT -> nudge out so it does not stick
+        // block hit → nudge
         arrow.setGravity(false);
-        Vector push = (e.getHitBlockFace() != null) ? e.getHitBlockFace().getDirection() : new Vector(0, 1, 0);
-        arrow.teleport(arrow.getLocation().add(push.multiply(0.30)));
-        arrow.setVelocity(push.multiply(0.10));
+        Vector push = (e.getHitBlockFace() != null)
+                ? e.getHitBlockFace().getDirection()
+                : new Vector(0, 1, 0);
+
+        arrow.teleport(arrow.getLocation().add(push.multiply(0.25)));
+        arrow.setVelocity(push.multiply(0.1));
     }
 
-    // ================= HOMING LOOP =================
+    // ================= LOOP =================
     private void startTask() {
         Bukkit.getScheduler().runTaskTimer(this, () -> {
             Iterator<UUID> it = arrows.iterator();
@@ -173,48 +186,36 @@ public class HomingBowPlugin extends JavaPlugin implements Listener {
 
                 LivingEntity target = findTarget(arrow);
 
-                // Particle
-                if (particlesEnabled && (!onlyWhenHoming || target != null)) {
-                    spawnParticle(arrow);
+                if (particlesEnabled) {
+                    arrow.getWorld().spawnParticle(
+                            particleType,
+                            arrow.getLocation(),
+                            particleCount,
+                            offX, offY, offZ,
+                            0
+                    );
                 }
 
                 if (target == null) {
-                    // keep moving forward
                     Vector v = arrow.getVelocity();
                     if (v.lengthSquared() < 1e-6) v = arrow.getLocation().getDirection();
                     arrow.setVelocity(v.normalize().multiply(arrowSpeed));
                     continue;
                 }
 
-                Vector toTarget = target.getEyeLocation().toVector().subtract(arrow.getLocation().toVector());
-                if (toTarget.lengthSquared() < 1e-6) continue;
-                Vector desired = toTarget.normalize();
+                Vector to = target.getEyeLocation().toVector().subtract(arrow.getLocation().toVector());
+                if (to.lengthSquared() < 1e-6) continue;
 
-                Vector currentVel = arrow.getVelocity();
-                if (currentVel.lengthSquared() < 1e-6) currentVel = arrow.getLocation().getDirection().multiply(0.01);
-                Vector current = currentVel.normalize();
+                Vector desired = to.normalize();
+                Vector cur = arrow.getVelocity();
+                if (cur.lengthSquared() < 1e-6) cur = desired.multiply(0.01);
 
-                Vector newDir = current.multiply(1.0 - turnRate).add(desired.multiply(turnRate));
-                if (newDir.lengthSquared() < 1e-6) continue;
+                Vector dir = cur.normalize().multiply(1 - turnRate).add(desired.multiply(turnRate));
+                if (dir.lengthSquared() < 1e-6) continue;
 
-                arrow.setVelocity(newDir.normalize().multiply(arrowSpeed));
+                arrow.setVelocity(dir.normalize().multiply(arrowSpeed));
             }
         }, 1L, 1L);
-    }
-
-    private void spawnParticle(AbstractArrow arrow) {
-        Location loc = arrow.getLocation();
-        World w = loc.getWorld();
-        if (w == null) return;
-
-       // Border-dust look: use DUST + DustOptions (compatible)
-if (particleType == Particle.DUST) {
-    w.spawnParticle(Particle.DUST, loc, particleCount, offX, offY, offZ, particleSpeed, dustOptions);
-    return;
-}
-
-        // Generic particles (no extra data)
-        w.spawnParticle(particleType, loc, particleCount, offX, offY, offZ, particleSpeed);
     }
 
     private LivingEntity findTarget(AbstractArrow arrow) {
@@ -222,9 +223,9 @@ if (particleType == Particle.DUST) {
         LivingEntity chosen = null;
 
         for (LivingEntity e : arrow.getWorld().getLivingEntities()) {
-            if (e instanceof Player) continue;       // never target players
+            if (e instanceof Player) continue;
             if (e instanceof ArmorStand) continue;
-            if (e.isDead() || !e.isValid()) continue;
+            if (e.isDead()) continue;
 
             double d = e.getLocation().distanceSquared(arrow.getLocation());
             if (d < best) {
@@ -242,5 +243,26 @@ if (particleType == Particle.DUST) {
             }
         }
         return null;
+    }
+
+    // ================= COMMAND: /lunarfix =================
+    @Override
+    public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        if (!command.getName().equalsIgnoreCase("lunarfix")) return false;
+
+        if (!(sender instanceof Player p)) {
+            sender.sendMessage("Csak játékos használhatja.");
+            return true;
+        }
+
+        ItemStack inHand = p.getInventory().getItemInMainHand();
+        if (inHand.getType() != Material.BOW) {
+            p.sendMessage(Component.text("Tarts a kezedben egy íjat."));
+            return true;
+        }
+
+        applyLunarMeta(inHand);
+        p.sendMessage(Component.text("Lunar Bow frissítve (lore + infinity + unbreakable)."));
+        return true;
     }
 }
