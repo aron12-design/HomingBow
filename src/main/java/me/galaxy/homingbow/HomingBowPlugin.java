@@ -57,14 +57,16 @@ public class HomingBowPlugin extends JavaPlugin implements Listener {
 public void onProjectileHit(ProjectileHitEvent e) {
     if (!(e.getEntity() instanceof AbstractArrow arrow)) return;
 
-    // csak a mi homing nyilaink
     Byte tag = arrow.getPersistentDataContainer().get(key, PersistentDataType.BYTE);
     if (tag == null || tag != (byte) 1) return;
 
-    // lebegjen tovább, ne “ragadjon be” blokkba
+    // ha mobot ütött és azt akarod, hogy eltűnjön:
+    // if (e.getHitEntity() != null) { arrow.remove(); return; }
+
     arrow.setGravity(false);
 
-    // “reset” hogy újra keressen és ne álljon meg
+    Vector n = (e.getHitBlockFace() != null) ? e.getHitBlockFace().getDirection() : new Vector(0, 1, 0);
+    arrow.teleport(arrow.getLocation().add(n.multiply(0.25)));
     arrow.setVelocity(new Vector(0, 0, 0));
 }
 
@@ -85,23 +87,6 @@ public void onProjectileHit(ProjectileHitEvent e) {
         avoidPlayersEnabled = c.getBoolean("avoid_players.enabled", true);
         avoidPlayersRadius = c.getDouble("avoid_players.radius", 1.5);
     }
-
-  @EventHandler
-public void onProjectileHit(ProjectileHitEvent e) {
-    if (!(e.getEntity() instanceof AbstractArrow arrow)) return;
-
-    Byte tag = arrow.getPersistentDataContainer().get(key, PersistentDataType.BYTE);
-    if (tag == null || tag != (byte) 1) return;
-
-    arrow.setGravity(false);
-
-    // húzzuk ki a blokk felületéről, hogy ne ragadjon be
-    Vector n = (e.getHitBlockFace() != null) ? e.getHitBlockFace().getDirection() : new Vector(0, 1, 0);
-    arrow.teleport(arrow.getLocation().add(n.multiply(0.25)));
-
-    // reset: lebegjen tovább és keressen
-    arrow.setVelocity(new Vector(0, 0, 0));
-}
 
 
     private void startTask() {
