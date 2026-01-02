@@ -1,9 +1,9 @@
 name: HomingBow
-version: 1.0.1-mobonly
+version: 1.0.1-mobonly-fixed
 main: me.galaxy.homingbow.HomingBowPlugin
 api-version: "1.21"
 author: Galaxy
-description: Homing arrows for a special bow (ItemsAdder-compatible via CustomModelData/name/lore match)
+description: Mob-only homing arrows for a special ItemsAdder bow (CMD match) with player-avoidance
 commands:
   homingbowreload:
     description: Reload HomingBow config

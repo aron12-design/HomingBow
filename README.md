@@ -1,18 +1,15 @@
-# HomingBow (Paper 1.21.7)
+# HomingBow (Paper 1.21.7) - mob only (fixed)
 
-This repo builds a small Paper plugin that makes arrows "home" toward nearby targets when shot from a special bow.
-
-## How to get the JAR (no compiling on your PC)
-
-1) Create a new GitHub repo (public or private)
-2) Upload everything from this folder to the repo root
-3) Go to **Actions** → **Build HomingBow** → **Run workflow**
-4) Download the artifact: **HomingBow-jar** → contains `HomingBow-1.0.0.jar`
+## Build jar (no local compiling)
+GitHub → Actions → Build HomingBow → Run workflow → download artifact `HomingBow-jar`
 
 ## Install
+- Put `HomingBow-1.0.1.jar` into `/plugins/`
+- Start server once (creates config)
+- Edit `plugins/HomingBow/config.yml`:
+  - set `bow_match.custom_model_data` to your ItemsAdder bow CMD
+- Reload config: `/homingbowreload` (or restart)
 
-- Put `HomingBow-1.0.0.jar` into `/plugins/`
-- Start server once to generate config
-- Edit `plugins/HomingBow/config.yml`
-  - Set `custom_model_data` to your ItemsAdder bow CMD
-- Reload: `/homingbowreload`
+## Notes
+- Never targets players (hard-locked)
+- Extra safety: avoids choosing mob targets if the arrow-to-mob line passes too close to any player (config: avoid_players)

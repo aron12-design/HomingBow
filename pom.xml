@@ -5,8 +5,9 @@
 
   <groupId>me.galaxy</groupId>
   <artifactId>HomingBow</artifactId>
-  <version>1.0.0</version>
+  <version>1.0.1</version>
   <name>HomingBow</name>
+
   <properties>
     <maven.compiler.source>21</maven.compiler.source>
     <maven.compiler.target>21</maven.compiler.target>
@@ -31,13 +32,6 @@
   </dependencies>
 
   <build>
-    <resources>
-      <resource>
-        <directory>src/main/resources</directory>
-        <filtering>false</filtering>
-      </resource>
-    </resources>
-
     <plugins>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
@@ -53,16 +47,9 @@
         <artifactId>maven-jar-plugin</artifactId>
         <version>3.4.2</version>
         <configuration>
-          <archive>
-            <manifestEntries>
-              <Built-By>GitHub Actions</Built-By>
-            </manifestEntries>
-          </archive>
-          <finalName>HomingBow-1.0.0</finalName>
+          <finalName>HomingBow-1.0.1</finalName>
         </configuration>
       </plugin>
-
-      <!-- No shade needed (Paper loads plugin classes, dependencies are provided) -->
     </plugins>
   </build>
 </project>

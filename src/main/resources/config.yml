@@ -1,26 +1,17 @@
 bow_match:
-  use_custom_model_data: true
-  custom_model_data: 123456
-  use_name_contains: false
-  name_contains: "Homing Bow"
-  use_lore_contains: false
-  lore_contains: "Tracking"
+  custom_model_data: 123456   # <- ide a Lunar Bow CMD
 
 homing:
   enabled: true
-  tick_interval: 1
   range: 25.0
   turn_rate: 0.22
-  keep_speed: true
-  speed_multiplier: 1.00
-  require_line_of_sight: false
+
+avoid_players:
+  enabled: true
+  radius: 1.5
 
 targets:
-  target_players: true
   target_mobs: true
   ignore_shooter: true
   ignore_tamed: true
   ignore_armor_stands: true
-
-debug:
-  log_shoot: false
