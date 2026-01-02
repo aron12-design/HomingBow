@@ -37,7 +37,7 @@ public class HomingBowPlugin extends JavaPlugin implements Listener {
     private long lifetimeMillis;
     private double damageAmount;
 
-    // particle
+    // particles
     private boolean particlesEnabled;
     private Particle particleType;
     private int particleCount;
@@ -72,31 +72,40 @@ public class HomingBowPlugin extends JavaPlugin implements Listener {
         String p = c.getString("particles.type", "END_ROD");
         try {
             particleType = Particle.valueOf(p.toUpperCase(Locale.ROOT));
-        } catch (Exception e) {
+        } catch (Exception ex) {
             particleType = Particle.END_ROD;
         }
-
         particleCount = Math.max(0, c.getInt("particles.count", 2));
         offX = c.getDouble("particles.offset.x", 0.03);
         offY = c.getDouble("particles.offset.y", 0.03);
         offZ = c.getDouble("particles.offset.z", 0.03);
     }
 
-    // ====== Lore + meta fix (Unbreakable + Infinity visible) ======
+    // ====== Only change the item when user runs /lunarfix (so ItemsAdder texture won't break) ======
+    private boolean isLunarBow(ItemStack item) {
+        if (item == null || item.getType() != Material.BOW) return false;
+        ItemMeta meta = item.getItemMeta();
+        return meta != null && meta.hasCustomModelData() && meta.getCustomModelData() == customModelData;
+    }
+
     private void applyLunarMeta(ItemStack bow) {
+        if (!isLunarBow(bow)) return;
+
         ItemMeta meta = bow.getItemMeta();
         if (meta == null) return;
 
-        // durability bar OFF
+        // Preserve CMD (texture key)
+        int cmd = meta.getCustomModelData();
+
+        // Durability bar OFF
         meta.setUnbreakable(true);
         meta.addItemFlags(ItemFlag.HIDE_UNBREAKABLE);
         if (meta instanceof Damageable dmg) dmg.setDamage(0);
 
-        // Infinity I (VISIBLE!)
+        // Infinity I (VISIBLE)
         meta.addEnchant(Enchantment.INFINITY, 1, true);
-        // NINCS HIDE_ENCHANTS -> látszik az enchant
 
-        // Lore (1/1 a képed szerint, 40 blokk)
+        // Lore (1/1 like your screenshot, 40 blocks)
         List<Component> lore = List.of(
                 Component.empty(),
                 mm.deserialize("<gold><bold>PASSZÍV</bold> <dark_gray>-</dark_gray> <yellow>✕ Nyomkövetés <green>[+]</green>"),
@@ -107,6 +116,9 @@ public class HomingBowPlugin extends JavaPlugin implements Listener {
         );
         meta.lore(lore);
 
+        // Re-set CMD just in case
+        meta.setCustomModelData(cmd);
+
         bow.setItemMeta(meta);
     }
 
@@ -116,17 +128,14 @@ public class HomingBowPlugin extends JavaPlugin implements Listener {
         ItemStack bow = e.getBow();
         if (bow == null) return;
 
-        // mindig frissítjük a meta-t (lore + infinity + unbreakable)
-        applyLunarMeta(bow);
-
-        ItemMeta meta = bow.getItemMeta();
-        if (meta == null || !meta.hasCustomModelData()) return;
-        if (meta.getCustomModelData() != customModelData) return;
+        // IMPORTANT: Do NOT edit item meta here (keeps ItemsAdder texture stable)
+        if (!isLunarBow(bow)) return;
 
         if (!(e.getProjectile() instanceof AbstractArrow arrow)) return;
 
         arrow.setGravity(false);
 
+        // Safe velocity (avoid NaN)
         Vector v = arrow.getVelocity();
         if (v.lengthSquared() < 1e-6) v = arrow.getLocation().getDirection();
         arrow.setVelocity(v.normalize().multiply(arrowSpeed));
@@ -144,7 +153,7 @@ public class HomingBowPlugin extends JavaPlugin implements Listener {
         Byte tag = arrow.getPersistentDataContainer().get(key, PersistentDataType.BYTE);
         if (tag == null || tag != (byte) 1) return;
 
-        // mob hit → FIX damage
+        // MOB HIT -> fixed damage + remove arrow
         if (e.getHitEntity() instanceof LivingEntity target) {
             Object s = arrow.getShooter();
             if (s instanceof LivingEntity shooter) target.damage(damageAmount, shooter);
@@ -156,17 +165,17 @@ public class HomingBowPlugin extends JavaPlugin implements Listener {
             return;
         }
 
-        // block hit → nudge
+        // BLOCK HIT -> nudge so it doesn't stick
         arrow.setGravity(false);
         Vector push = (e.getHitBlockFace() != null)
                 ? e.getHitBlockFace().getDirection()
                 : new Vector(0, 1, 0);
 
         arrow.teleport(arrow.getLocation().add(push.multiply(0.25)));
-        arrow.setVelocity(push.multiply(0.1));
+        arrow.setVelocity(push.multiply(0.10));
     }
 
-    // ================= LOOP =================
+    // ================= HOMING LOOP =================
     private void startTask() {
         Bukkit.getScheduler().runTaskTimer(this, () -> {
             Iterator<UUID> it = arrows.iterator();
@@ -184,8 +193,7 @@ public class HomingBowPlugin extends JavaPlugin implements Listener {
 
                 arrow.setGravity(false);
 
-                LivingEntity target = findTarget(arrow);
-
+                // particle trail
                 if (particlesEnabled) {
                     arrow.getWorld().spawnParticle(
                             particleType,
@@ -196,7 +204,9 @@ public class HomingBowPlugin extends JavaPlugin implements Listener {
                     );
                 }
 
+                LivingEntity target = findTarget(arrow);
                 if (target == null) {
+                    // keep moving forward safely
                     Vector v = arrow.getVelocity();
                     if (v.lengthSquared() < 1e-6) v = arrow.getLocation().getDirection();
                     arrow.setVelocity(v.normalize().multiply(arrowSpeed));
@@ -207,13 +217,13 @@ public class HomingBowPlugin extends JavaPlugin implements Listener {
                 if (to.lengthSquared() < 1e-6) continue;
 
                 Vector desired = to.normalize();
-                Vector cur = arrow.getVelocity();
-                if (cur.lengthSquared() < 1e-6) cur = desired.multiply(0.01);
+                Vector curVel = arrow.getVelocity();
+                if (curVel.lengthSquared() < 1e-6) curVel = desired.multiply(0.01);
 
-                Vector dir = cur.normalize().multiply(1 - turnRate).add(desired.multiply(turnRate));
-                if (dir.lengthSquared() < 1e-6) continue;
+                Vector newDir = curVel.normalize().multiply(1.0 - turnRate).add(desired.multiply(turnRate));
+                if (newDir.lengthSquared() < 1e-6) continue;
 
-                arrow.setVelocity(dir.normalize().multiply(arrowSpeed));
+                arrow.setVelocity(newDir.normalize().multiply(arrowSpeed));
             }
         }, 1L, 1L);
     }
@@ -225,7 +235,7 @@ public class HomingBowPlugin extends JavaPlugin implements Listener {
         for (LivingEntity e : arrow.getWorld().getLivingEntities()) {
             if (e instanceof Player) continue;
             if (e instanceof ArmorStand) continue;
-            if (e.isDead()) continue;
+            if (e.isDead() || !e.isValid()) continue;
 
             double d = e.getLocation().distanceSquared(arrow.getLocation());
             if (d < best) {
@@ -256,13 +266,13 @@ public class HomingBowPlugin extends JavaPlugin implements Listener {
         }
 
         ItemStack inHand = p.getInventory().getItemInMainHand();
-        if (inHand.getType() != Material.BOW) {
-            p.sendMessage(Component.text("Tarts a kezedben egy íjat."));
+        if (!isLunarBow(inHand)) {
+            p.sendMessage(Component.text("A kezedben a Lunar Bow legyen (ItemsAdder, CMD: " + customModelData + ")."));
             return true;
         }
 
         applyLunarMeta(inHand);
-        p.sendMessage(Component.text("Lunar Bow frissítve (lore + infinity + unbreakable)."));
+        p.sendMessage(Component.text("Lunar Bow frissítve: lore + Infinity I + unbreakable."));
         return true;
     }
 }
