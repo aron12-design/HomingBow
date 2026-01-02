@@ -64,9 +64,6 @@ public void onProjectileHit(ProjectileHitEvent e) {
     // lebegjen tovább, ne “ragadjon be” blokkba
     arrow.setGravity(false);
 
-    // ha van ilyen a te Paper buildeden, jó — ha nincs, a try-catch megfogja
-    try { arrow.setInBlock(false); } catch (Throwable ignored) {}
-
     // “reset” hogy újra keressen és ne álljon meg
     arrow.setVelocity(new Vector(0, 0, 0));
 }
@@ -89,22 +86,23 @@ public void onProjectileHit(ProjectileHitEvent e) {
         avoidPlayersRadius = c.getDouble("avoid_players.radius", 1.5);
     }
 
-    @EventHandler
-    public void onShoot(EntityShootBowEvent e) {
-        if (!enabled) return;
+  @EventHandler
+public void onProjectileHit(ProjectileHitEvent e) {
+    if (!(e.getEntity() instanceof AbstractArrow arrow)) return;
 
-        ItemStack bow = e.getBow();
-        if (bow == null) return;
+    Byte tag = arrow.getPersistentDataContainer().get(key, PersistentDataType.BYTE);
+    if (tag == null || tag != (byte) 1) return;
 
-        ItemMeta meta = bow.getItemMeta();
-        if (meta == null || !meta.hasCustomModelData()) return;
-        if (meta.getCustomModelData() != customModelData) return;
+    arrow.setGravity(false);
 
-        if (e.getProjectile() instanceof AbstractArrow arrow) {
-            arrow.getPersistentDataContainer().set(key, PersistentDataType.BYTE, (byte) 1);
-            arrows.add(arrow.getUniqueId());
-        }
-    }
+    // húzzuk ki a blokk felületéről, hogy ne ragadjon be
+    Vector n = (e.getHitBlockFace() != null) ? e.getHitBlockFace().getDirection() : new Vector(0, 1, 0);
+    arrow.teleport(arrow.getLocation().add(n.multiply(0.25)));
+
+    // reset: lebegjen tovább és keressen
+    arrow.setVelocity(new Vector(0, 0, 0));
+}
+
 
     private void startTask() {
         Bukkit.getScheduler().runTaskTimer(this, () -> {
