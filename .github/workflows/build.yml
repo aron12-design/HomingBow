@@ -1,4 +1,4 @@
-name: Build HomingBow (Gradle)
+name: Build HomingBow
 
 on:
   workflow_dispatch:
@@ -11,10 +11,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Java 21
+      - name: Set up Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -23,11 +23,10 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-   - name: Build with Gradle (verbose)
-  run: gradle --no-daemon --stacktrace --info build
+      - name: Build
+        run: gradle build
 
-
-      - name: Upload HomingBow jar
+      - name: Upload JAR
         uses: actions/upload-artifact@v4
         with:
           name: HomingBow-jar
